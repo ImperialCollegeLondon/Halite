@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<grammar xmlns:a="http://relaxng.org/ns/compatibility/annotations/1.0" xmlns="http://relaxng.org/ns/structure/1.0" datatypeLibrary="">
+  <include href="spud_base.rng"/>
+  <start>
+    <element name="Halite">
+      <a:documentation>Halite is a collection of python scripts which can calculate importance maps
+(sensitivities), do data assimilation and create non-intrusive reduced
+order models.</a:documentation>
+      <element name="ga_optimisation">
+        <a:documentation>Genetic algorithms based on the DEAP library (deap.readthedocs.io) to optimise well positions
+DEAP can usually be installed from the Ubuntu repositories. Otherwise install it from the official source.</a:documentation>
+        <element name="Output_filename">
+          <a:documentation>Output files are named according to this field. Non-standard
+characters in the simulation name should be avoided.</a:documentation>
+          <ref name="anystring"/>
+        </element>
+        <element name="Executable">
+          <a:documentation>This is the path to the executable that is going to be used.
+For example: ./icferst</a:documentation>
+          <ref name="anystring"/>
+        </element>
+        <element name="Input_file">
+          <a:documentation>This is the input filename to be used. It has to include 
+the path and also the extension. Example: ./test.mpml</a:documentation>
+          <ref name="anystring"/>
+        </element>
+        <element name="convergence_settings">
+          <a:documentation>Options to decide when the algorithm should stop</a:documentation>
+          <element name="Maximum_generations">
+            <a:documentation>Specify here the maximum number of generations to be studied.
+When reached, the algorithm will stop.  </a:documentation>
+            <ref name="integer"/>
+          </element>
+          <element name="Gradient_convergence">
+            <a:documentation>If the relative optimisation is not changing for more than 2 
+generations below the threshold specified here the simulation will stop. 
+Recommended 0.01; To disable, set it to a negative value.</a:documentation>
+            <ref name="real"/>
+          </element>
+          <optional>
+            <element name="Absolute_convergence">
+              <a:documentation>If the fitness is below (above if opmising) the specified number then stop the simulation.
+</a:documentation>
+              <ref name="real"/>
+            </element>
+          </optional>
+        </element>
+        <optional>
+          <element name="cubit_integration">
+            <a:documentation>Specify here the path to the cubit executable as well as the input file that will be modified for the different
+scenarios, tipically a .jou file.</a:documentation>
+            <element name="cubit_path">
+              <data type="string"/>
+            </element>
+            <element name="cubit_input_file">
+              <a:documentation>Path and name of the input file for cubit.
+
+VERY IMPORTANT: This file must have the correct paths for the step files.
+ALSO the cd path must be set as "PATH_TO_FOLDER", so Halite can dynamically change this path to the correct path
+</a:documentation>
+              <data type="string"/>
+            </element>
+            <optional>
+              <element name="cubit_pro">
+                <a:documentation>If using combined the cubit-free version and the cubit paid version, specify here the path to the 
+executable of the licensed version as well as the journal file of the executable version. 
+This option also activates a waiting action just in case the floating license is being use elsewhere with a maximum wait of 2 hours.</a:documentation>
+                <element name="cubit_pro_path">
+                  <data type="string"/>
+                </element>
+                <element name="cubit_pro_input_file">
+                  <a:documentation>Path and name of the input file for cubit.
+
+VERY IMPORTANT: This file must have the correct paths for the step files.
+ALSO the cd path must be set as "PATH_TO_FOLDER", so Halite can dynamically change this path to the correct path
+</a:documentation>
+                  <data type="string"/>
+                </element>
+              </element>
+            </optional>
+          </element>
+        </optional>
+        <optional>
+          <element name="optimise_input">
+            <a:documentation>Optimise input parameter.
+GA optimisation can also be used to modify IC-FERST input parameters.
+If this option is activated, the mpml file will be modify similarly to cubit files, i.e.
+a given patern in the variables will be sought in the mpml file and explored in different scenarios.
+If doing this, it is recommended to not optimise also well locations.</a:documentation>
+            <empty/>
+          </element>
+        </optional>
+        <optional>
+          <element name="Number_processors">
+            <a:documentation>Number of processors to run the ensembles. By default = 1.</a:documentation>
+            <ref name="integer"/>
+            <optional>
+              <element name="MPI_runs">
+                <a:documentation>If desired, the forward models can be run in parallel. Making each batch smaller but still using Number_processors as total.
+This is very useful if all the simulations will not fit in the available RAM or if the speed time between simulations 
+can be very different and larger batches will be slowed down by the slowest simulation.
+
+WARNING THIS REQUIRES FLDECOMP TO BE INSTALLED</a:documentation>
+                <ref name="integer"/>
+              </element>
+            </optional>
+          </element>
+        </optional>
+        <element name="Locations_to_study">
+          <a:documentation>Specify here how many locations/wells are going to be considered</a:documentation>
+          <element name="value">
+            <ref name="integer"/>
+          </element>
+          <optional>
+            <element name="Mind_the_gap">
+              <a:documentation>Specify here the separation between locations to study to be respected.
+The locations to study will be separated by this distance, this is to ensure
+that locations that are non suitable, for example injector and producer separated by few meters
+are not considered.</a:documentation>
+              <ref name="integer"/>
+            </element>
+          </optional>
+          <optional>
+            <element name="Initial_guess">
+              <a:documentation>If selected, an initial guess will be considered in the first population. 
+This severely helps the convergence and it is therefore highly recommended.
+Numbers have to be separated by commas and it has to coincide with the number of variables 
+to be studied in the optimisation problem times number of locations to study.
+Example with 3 variables and two locations: 2, 3, 5, 20, 30, 50</a:documentation>
+              <data type="string"/>
+            </element>
+          </optional>
+        </element>
+        <element name="Population_generation">
+          <a:documentation>This is the population that each generation can have, at least 2. 
+Recommended to be a multiple of Number_processors.</a:documentation>
+          <ref name="integer"/>
+        </element>
+        <element name="Breeding_probability">
+          <a:documentation>Probability of two members to "cross" and generate offspring.
+It has to be a number between 0 and 1. For example: 0.5  </a:documentation>
+          <element name="value">
+            <ref name="real"/>
+          </element>
+          <optional>
+            <element name="Generation_method">
+              <a:documentation>By default the generation method is based on a randomise integer method.
+Here the user can specify a different method if required. 
+The inputs are: TO BE DEVELOPED</a:documentation>
+              <ref name="python_code"/>
+            </element>
+          </optional>
+        </element>
+        <element name="Mutation_probability">
+          <a:documentation>Probability of an offspring to suffer from mutation. This is useful to expand the area of search
+and avoid local minima.
+It has to be a number between 0 and 1. For example: 0.25</a:documentation>
+          <element name="value">
+            <ref name="real"/>
+          </element>
+          <optional>
+            <element name="Mutation_method">
+              <a:documentation>By default the mutation method is based on a randomise integer method.
+Here the user can specify a different method if required. 
+The inputs are: instance and mutpb. It has tor return instance.
+Return is a list containing the new Variables values.</a:documentation>
+              <ref name="python_code"/>
+            </element>
+          </optional>
+        </element>
+        <element name="Precision">
+          <a:documentation>Percentage area of search.
+This parameters, expressed in times one, specifies the area of search based on a percentage of the Min_limit and Max_limit
+of each variables. For example, if Min_limit = -1000 and Max_Limit = 1000, for a precision of 0.1 the area of search
+will be split in sections of 200, i.e. the associated variable will only have values that are multiples of 200.</a:documentation>
+          <ref name="real"/>
+        </element>
+        <element name="Fitness">
+          <a:documentation>The fitness function specifies the functional to optimise</a:documentation>
+          <element name="Optimisation">
+            <a:documentation>Select whether to minimise the functional or maximise it.</a:documentation>
+            <choice>
+              <element name="Minimise">
+                <empty/>
+              </element>
+              <element name="Maximise">
+                <empty/>
+              </element>
+            </choice>
+          </element>
+          <element name="producer_ids">
+            <a:documentation>Specify here, the ids of all the boundaries that are producers, separated by commas or spaces</a:documentation>
+            <data type="string"/>
+          </element>
+          <element name="injector_ids">
+            <a:documentation>Specify here, the ids of all the boundaries that are injectors, separated by commas or spaces</a:documentation>
+            <data type="string"/>
+          </element>
+          <optional>
+            <element name="python_function">
+              <a:documentation>If specified the written code will be used instead of the internal. The internal consists of val = sum(prod[:,:]) or sum(prod_temp) for geothermal.
+
+This is standard PYHTON3 code that is executed normally and therefore all python3 functionality is available.
+
+To facilitate the writting of the fitness function in this code the user has access to: timeList, prod, inject, prod_temp, inject_temp and walltime (this latter is a real).
+These Numpy Arrays of size [Number of phases, # Time levels] (except timeList which is only [# Time Levels] ) are extracted from the .csv file and they combine all the production of a given phase
+through the producers/injectors,  i.e. prod = [phase1, [time 1, time 2, ...], phase2, [time 1, time 2, ...] ...].
+&lt;b&gt;NOTE&lt;/b&gt; that the user can read the outfluxes file.
+
+&lt;b&gt;The user has to return a single value: fitness_val&lt;/b&gt;
+
+Example of code using numpy to sum the array:
+
+fitness_val = np.sum(prod)</a:documentation>
+              <ref name="python_code"/>
+            </element>
+          </optional>
+        </element>
+        <optional>
+          <element name="GA_method">
+            <a:documentation>Specify as many variables that you want to be considered for the optimisation
+For well location you may need: X, Y, Depth, inclination, orientation
+The parameters will need to link with the method to generate different wells.</a:documentation>
+            <element name="Evolutionary_algorithm">
+              <choice>
+                <element name="eaSimple">
+                  <a:documentation>This algorithm reproduce the simplest evolutionary algorithm as presented in chapter 7 of [Back2000]</a:documentation>
+                  <empty/>
+                </element>
+                <element name="eaMuCommaLambda">
+                  <a:documentation>mu – The number of individuals to select for the next generation
+
+lambda The number of children to produce at each generation. 
+                      
+For more information https://deap.readthedocs.io/en/master/api/algo.html
+
+Recommended mu = 1/3 of population and lambda = 2/3
+
+It is important not to have a ratio of 1 of lambda:mu</a:documentation>
+                  <element name="Mu">
+                    <ref name="integer"/>
+                  </element>
+                  <element name="Lambda">
+                    <ref name="integer"/>
+                  </element>
+                </element>
+                <element name="eaMuPlusLambda">
+                  <a:documentation>mu – The number of individuals to select for the next generation.
+lambda_ – The number of children to produce at each generation.                           
+For more information https://deap.readthedocs.io/en/master/api/algo.html</a:documentation>
+                  <element name="Mu">
+                    <ref name="integer"/>
+                  </element>
+                  <element name="Lambda">
+                    <ref name="integer"/>
+                  </element>
+                </element>
+              </choice>
+            </element>
+            <element name="Selection_method">
+              <a:documentation>A selection method has to be chosen to decide the best fitted of the offspring</a:documentation>
+              <choice>
+                <element name="selBest">
+                  <a:documentation>Only the fittest survive</a:documentation>
+                  <empty/>
+                </element>
+                <element name="selNSGA2">
+                  <a:documentation>Selection based on the NSGA-II approach</a:documentation>
+                  <empty/>
+                </element>
+                <element name="selSPEA2">
+                  <a:documentation>Selection based on the SPEA-II approach</a:documentation>
+                  <empty/>
+                </element>
+              </choice>
+            </element>
+            <optional>
+              <element name="Use_CMA">
+                <a:documentation>Use the Covariance Matrix Adaptation Evolution Strategy (CMA-ES) [Hansen2001]</a:documentation>
+                <element name="centroid">
+                  <a:documentation>For example: 2 times the precision</a:documentation>
+                  <ref name="integer"/>
+                </element>
+                <element name="sigma">
+                  <a:documentation>1/5th of the domain (area of search) is recommended</a:documentation>
+                  <ref name="integer"/>
+                </element>
+              </element>
+            </optional>
+          </element>
+        </optional>
+        <zeroOrMore>
+          <element name="Variables">
+            <a:documentation>Specify as many variables that you want to be considered for the optimisation
+For well location you may need: X, Y, Depth, inclination, orientation
+The parameters will need to link with the method to generate different wells.
+
+Pattern to look for in the input file to be modified. For example in the .jou file 
+the X coordinate can be coded as XCORD. This has to include the number of the well location,
+if one well is present and here XCORD is specified, in the .jou file the pattern to look for will be XCORD1
+
+WARNING: CMA MAY NOT WORK PROPERLY WHEN USING ONE SINGLE VARIABLE</a:documentation>
+            <attribute name="name">
+              <data type="string"/>
+            </attribute>
+            <attribute name="Variable_pattern">
+              <data type="string"/>
+            </attribute>
+            <element name="Min_limit">
+              <a:documentation>Minimum bound to be explored by the GA method.
+
+Make sure that the actual boundaries of the domain cannot be reached, a well exactly at the boundary may fail.</a:documentation>
+              <ref name="integer"/>
+            </element>
+            <element name="Max_limit">
+              <a:documentation>Maximum bound to be explored by the GA method.
+
+Make sure that the actual boundaries of the domain cannot be reached, a well exactly at the boundary may fail.</a:documentation>
+              <ref name="integer"/>
+            </element>
+            <optional>
+              <element name="normaliser">
+                <a:documentation>If the variable needs to be evaluated in the real space, for example 0.5; The only solution is to bring
+the variable to the integer space where it can be evaluated. The recommendation is to, for example, if the variable is 
+evaluated between -1 and 1 to set the normaliser to 1000 and the min_limit and max_limit to -1000 and 1000 instead of -1 and 1.
+
+The normaliser will turn the variable into the real space when evaluating it.
+
+Otherwise this variable is by default 1.0 and will have no effect.</a:documentation>
+                <ref name="integer"/>
+              </element>
+            </optional>
+          </element>
+        </zeroOrMore>
+        <optional>
+          <element name="Hall_of_fame">
+            <a:documentation>Lenght of the ranking of the best results to show after finishing. By default 10.</a:documentation>
+            <ref name="integer"/>
+          </element>
+        </optional>
+      </element>
+    </element>
+  </start>
+</grammar>

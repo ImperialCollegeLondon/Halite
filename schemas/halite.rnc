@@ -1,0 +1,238 @@
+include "spud_base.rnc"
+
+start =
+   (
+      ## Halite is a collection of python scripts which can calculate importance maps
+      ## (sensitivities), do data assimilation and create non-intrusive reduced
+      ## order models.
+      element Halite {
+                ## Genetic algorithms based on the DEAP library (deap.readthedocs.io) to optimise well positions
+                ## DEAP can usually be installed from the Ubuntu repositories. Otherwise install it from the official source.
+                element ga_optimisation
+                        {
+                        ## Output files are named according to this field. Non-standard
+                        ## characters in the simulation name should be avoided.
+                        element Output_filename {
+                           anystring
+                        },
+                        ## This is the path to the executable that is going to be used.
+                        ## For example: ./icferst
+                        element Executable {
+                           anystring
+                        },
+                        ## This is the input filename to be used. It has to include 
+                        ## the path and also the extension. Example: ./test.mpml
+                        element Input_file {
+                           anystring
+                        },
+                        ## Options to decide when the algorithm should stop
+                        element convergence_settings{
+                            ## Specify here the maximum number of generations to be studied.
+                            ## When reached, the algorithm will stop.  
+                            element Maximum_generations { integer },  
+                            ## If the relative optimisation is not changing for more than 2 
+                            ## generations below the threshold specified here the simulation will stop. 
+                            ## Recommended 0.01; To disable, set it to a negative value.
+                            element Gradient_convergence { real },
+                            ## If the fitness is below (above if opmising) the specified number then stop the simulation.
+                            ## 
+                            element Absolute_convergence { real }?                            
+                        }, 
+                        ## Specify here the path to the cubit executable as well as the input file that will be modified for the different
+                        ## scenarios, tipically a .jou file.
+                        element cubit_integration{
+                            element cubit_path{ string },
+                            ##Path and name of the input file for cubit.
+                            ##
+                            ## VERY IMPORTANT: This file must have the correct paths for the step files.
+                            ## ALSO the cd path must be set as "PATH_TO_FOLDER", so Halite can dynamically change this path to the correct path
+                            ##
+                            element cubit_input_file{ string },
+                              ## If using combined the cubit-free version and the cubit paid version, specify here the path to the 
+                              ## executable of the licensed version as well as the journal file of the executable version. 
+                              ## This option also activates a waiting action just in case the floating license is being use elsewhere with a maximum wait of 2 hours.
+                              element cubit_pro{
+                                element cubit_pro_path{ string },
+                                ##Path and name of the input file for cubit.
+                                ##
+                                ## VERY IMPORTANT: This file must have the correct paths for the step files.
+                                ## ALSO the cd path must be set as "PATH_TO_FOLDER", so Halite can dynamically change this path to the correct path
+                                ##
+                                element cubit_pro_input_file{ string }
+                                }?
+                        }?,
+                        ## Optimise input parameter.
+                        ## GA optimisation can also be used to modify IC-FERST input parameters.
+                        ## If this option is activated, the mpml file will be modify similarly to cubit files, i.e.
+                        ## a given patern in the variables will be sought in the mpml file and explored in different scenarios.
+                        ## If doing this, it is recommended to not optimise also well locations.
+                        element optimise_input { empty }?, 
+                        ## Number of processors to run the ensembles. By default = 1.
+                        element Number_processors { 
+                        integer,
+                        (
+                        ## If desired, the forward models can be run in parallel. Making each batch smaller but still using Number_processors as total.
+                        ## This is very useful if all the simulations will not fit in the available RAM or if the speed time between simulations 
+                        ## can be very different and larger batches will be slowed down by the slowest simulation.
+                        ##
+                        ## WARNING THIS REQUIRES FLDECOMP TO BE INSTALLED
+                        element MPI_runs { integer }?
+                        ) }?, 
+                        
+                        ## Specify here how many locations/wells are going to be considered
+                        element Locations_to_study{
+                            element value{ integer },
+                            ## Specify here the separation between locations to study to be respected.
+                            ## The locations to study will be separated by this distance, this is to ensure
+                            ## that locations that are non suitable, for example injector and producer separated by few meters
+                            ## are not considered.
+                            element Mind_the_gap{ integer }?,
+                            ## If selected, an initial guess will be considered in the first population. 
+                            ## This severely helps the convergence and it is therefore highly recommended.
+                            ## Numbers have to be separated by commas and it has to coincide with the number of variables 
+                            ## to be studied in the optimisation problem times number of locations to study.
+                            ## Example with 3 variables and two locations: 2, 3, 5, 20, 30, 50
+                            element Initial_guess { string }? 
+                        },
+                        ## This is the population that each generation can have, at least 2. 
+                        ## Recommended to be a multiple of Number_processors.
+                        element Population_generation { integer },   
+                        ## Probability of two members to "cross" and generate offspring.
+                        ## It has to be a number between 0 and 1. For example: 0.5  
+                        element Breeding_probability { 
+                            element value {real},
+                            ## By default the generation method is based on a randomise integer method.
+                            ## Here the user can specify a different method if required. 
+                            ## The inputs are: TO BE DEVELOPED
+                            element Generation_method { python_code }?                        
+                         },    
+                        ## Probability of an offspring to suffer from mutation. This is useful to expand the area of search
+                        ## and avoid local minima.
+                        ## It has to be a number between 0 and 1. For example: 0.25
+                        element Mutation_probability { 
+                            element value {real},
+                            ## By default the mutation method is based on a randomise integer method.
+                            ## Here the user can specify a different method if required. 
+                            ## The inputs are: instance and mutpb. It has tor return instance.
+                            ## Return is a list containing the new Variables values.
+                            element Mutation_method { python_code }?           
+                         },
+                        ## Percentage area of search.
+                        ## This parameters, expressed in times one, specifies the area of search based on a percentage of the Min_limit and Max_limit
+                        ## of each variables. For example, if Min_limit = -1000 and Max_Limit = 1000, for a precision of 0.1 the area of search
+                        ## will be split in sections of 200, i.e. the associated variable will only have values that are multiples of 200.
+                        element Precision { real },
+                        ## The fitness function specifies the functional to optimise
+                        element Fitness{
+                            ## Select whether to minimise the functional or maximise it.
+                            element Optimisation{
+                                element Minimise{empty}|
+                                element Maximise{empty}
+                            },
+                            ## Specify here, the ids of all the boundaries that are producers, separated by commas or spaces
+                            element producer_ids{string},
+                            ## Specify here, the ids of all the boundaries that are injectors, separated by commas or spaces
+                            element injector_ids{string},
+                            ## If specified the written code will be used instead of the internal. The internal consists of val = sum(prod[:,:]) or sum(prod_temp) for geothermal.
+                            ##
+                            ## This is standard PYHTON3 code that is executed normally and therefore all python3 functionality is available.
+                            ##
+                            ## To facilitate the writting of the fitness function in this code the user has access to: timeList, prod, inject, prod_temp, inject_temp and walltime (this latter is a real).
+                            ## These Numpy Arrays of size [Number of phases, # Time levels] (except timeList which is only [# Time Levels] ) are extracted from the .csv file and they combine all the production of a given phase
+                            ## through the producers/injectors,  i.e. prod = [phase1, [time 1, time 2, ...], phase2, [time 1, time 2, ...] ...].
+                            ## <b>NOTE</b> that the user can read the outfluxes file.
+                            ## 
+                            ## <b>The user has to return a single value: fitness_val</b>
+                            ##
+                            ## Example of code using numpy to sum the array:
+                            ## 
+                            ## fitness_val = np.sum(prod)
+                            element python_function { python_code }?                             
+
+                        },       
+                        ## Specify as many variables that you want to be considered for the optimisation
+                        ## For well location you may need: X, Y, Depth, inclination, orientation
+                        ## The parameters will need to link with the method to generate different wells.
+                        element GA_method{
+                            element Evolutionary_algorithm{
+                                ## This algorithm reproduce the simplest evolutionary algorithm as presented in chapter 7 of [Back2000]
+                                element eaSimple { empty }| 
+                                ## mu – The number of individuals to select for the next generation
+                                ##
+                                ## lambda The number of children to produce at each generation. 
+                                ##                       
+                                ## For more information https://deap.readthedocs.io/en/master/api/algo.html
+                                ##
+                                ## Recommended mu = 1/3 of population and lambda = 2/3
+                                ##
+                                ## It is important not to have a ratio of 1 of lambda:mu
+                                element eaMuCommaLambda { 
+                                    element Mu{integer},
+                                    element Lambda{integer} 
+                                }| 
+                                ## mu – The number of individuals to select for the next generation.
+                                ## lambda_ – The number of children to produce at each generation.                           
+                                ## For more information https://deap.readthedocs.io/en/master/api/algo.html
+                                element eaMuPlusLambda { 
+                                    element Mu{integer},
+                                    element Lambda{integer}
+                                } 
+                           },
+                            ## A selection method has to be chosen to decide the best fitted of the offspring
+                            element Selection_method{
+                                ## Only the fittest survive
+                                element selBest{empty}| 
+                                ## Selection based on the NSGA-II approach
+                                element selNSGA2{empty}|
+                                ## Selection based on the SPEA-II approach
+                                element selSPEA2{empty}
+                            },
+                            ## Use the Covariance Matrix Adaptation Evolution Strategy (CMA-ES) [Hansen2001]
+                            element Use_CMA{
+                                ## For example: 2 times the precision
+                                element centroid{integer},
+                                ## 1/5th of the domain (area of search) is recommended
+                                element sigma {integer}
+                            }?
+                        }?,  
+                       
+                        ## Specify as many variables that you want to be considered for the optimisation
+                        ## For well location you may need: X, Y, Depth, inclination, orientation
+                        ## The parameters will need to link with the method to generate different wells.
+                        ##
+                        ## Pattern to look for in the input file to be modified. For example in the .jou file 
+                        ## the X coordinate can be coded as XCORD. This has to include the number of the well location,
+                        ## if one well is present and here XCORD is specified, in the .jou file the pattern to look for will be XCORD1
+                        ##
+                        ## WARNING: CMA MAY NOT WORK PROPERLY WHEN USING ONE SINGLE VARIABLE
+                        element Variables{
+                            attribute name { string },
+                            attribute Variable_pattern {string},
+                            ## Minimum bound to be explored by the GA method.
+                            ##
+                            ## Make sure that the actual boundaries of the domain cannot be reached, a well exactly at the boundary may fail.
+                            element Min_limit { integer },                            
+                            ## Maximum bound to be explored by the GA method.
+                            ##
+                            ## Make sure that the actual boundaries of the domain cannot be reached, a well exactly at the boundary may fail.
+                            element Max_limit { integer },
+                            ## If the variable needs to be evaluated in the real space, for example 0.5; The only solution is to bring
+                            ## the variable to the integer space where it can be evaluated. The recommendation is to, for example, if the variable is 
+                            ## evaluated between -1 and 1 to set the normaliser to 1000 and the min_limit and max_limit to -1000 and 1000 instead of -1 and 1.
+                            ##
+                            ## The normaliser will turn the variable into the real space when evaluating it.
+                            ##
+                            ## Otherwise this variable is by default 1.0 and will have no effect.
+                            element normaliser { integer }?                                     
+                        }*,             
+                        ## Lenght of the ranking of the best results to show after finishing. By default 10.
+                        element Hall_of_fame { integer }?                                                                                         
+                        }
+                                          
+             }
+
+)
+
+
+
+ 
