@@ -37,7 +37,7 @@ ga_well_location_optimisation.main()
 
 
 # read in the Halite options
-Halite_options, fwd_options,nirom_options = get_Halite_options()
+Halite_options = get_Halite_options()
 
 call_optimisation()
 

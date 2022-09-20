@@ -34,10 +34,6 @@ import libspud
 import datetime
 import csv
 
-class Data_Assimilation():
-    def __init__(self):
-        self.fwd_input_file=""
-
 class Halite_input():
     def __init__(self):
         self.output_filename = ""                       # fwd
@@ -45,7 +41,6 @@ class Halite_input():
         self.input_file = ""                            # fwd 
         self.dimension = 0                              # fwd 
         self.avoid_perturbing_near_wells  = False       # Halite
-        self.Halite_operation = ""                      # Halite
         self.functional = Functional()                  # func
         self.Field_To_study_list=[]
         ###   GA optimisation    ###
@@ -82,6 +77,26 @@ class Halite_input():
         self.injector_ids = ""
         self.optimise_input = False
 
+class Functional_field():
+    def __init__(self):
+        self.name = ""                                  # func field
+        self.phase = -1                                 # func field
+        self.field_type = ""                            # func field
+        self.mesh_type = ""                             # func field
+        self.indices_of_interest = -1                   # func field
+        self.DGified = ""                               # func field
+        self.reference_value = -1                       # func field
+
+
+class Functional():
+    def __init__(self):
+        self.time = ""                                  # func
+        self.type = ""
+        self.Sensors = []                               # func
+        self.Observations = []
+        self.Functional_field = []                      # func
+        self.square_integrand = False
+
 
 class ga_variable():
     def __init__(self):
@@ -94,8 +109,6 @@ class ga_variable():
 def get_Halite_options():
     "Initialises the structure for the options."
     Halite_options = Halite_input()
-    nirom_options = Nirom_input()
-    fwd_options = Forward_model_options()
 
     #Read the input data from the user
     Halite_input_file = str(sys.argv[1])
@@ -110,7 +123,7 @@ def get_Halite_options():
 
     
     Halite_options.Halite_operation = 'ga_optimisation'
-    path = '/ga_optimisation'
+    path = 'ga_optimisation'
 
     # previously these three options were at the top level
     Halite_options.output_filename = libspud.get_option(path + '/Output_filename')
@@ -193,4 +206,4 @@ def get_Halite_options():
 
     libspud.clear_options()
 
-    return Halite_options, fwd_options, nirom_options
+    return Halite_options

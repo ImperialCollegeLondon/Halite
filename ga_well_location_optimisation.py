@@ -22,7 +22,7 @@ bounding_thickness = 500 #(so Halite_max and Halite_min values is based on this 
 
 #Read Halite options, for the time being just so we can call the same subroutines
 # read in the Halite options
-Halite_options, fwd_options, nirom_options = get_Halite_options()
+Halite_options = get_Halite_options()
 # get xml extension (mpml or flml)
 xml_extension = get_xml_extension(Halite_options.input_file)
 # load the options for the forward model from xml file
