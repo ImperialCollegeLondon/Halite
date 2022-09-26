@@ -145,8 +145,10 @@ def modify_experiment(input_file, foldername, instance, cwd):
         for i in range(Halite_options.ga_locations_to_study):
             for j in range(len(Halite_options.ga_variables)):
                 normaliser = Halite_options.ga_variables[j].normaliser
-                filedata = filedata.replace(Halite_options.ga_variables[j].variable_pattern + str(i + 1),
-                             str( float(instance_bak[j + len(Halite_options.ga_variables) * i])/float(normaliser) ))
+                if j<2: #only convert coordinates
+                    filedata = filedata.replace(Halite_options.ga_variables[j].variable_pattern + str(i + 1), str( float(instance_bak[j + len(Halite_options.ga_variables) * i])/float(normaliser) ))
+                else:
+                    filedata = filedata.replace(Halite_options.ga_variables[j].variable_pattern + str(i + 1), str(instance[j + len(Halite_options.ga_variables) * i]))
 
         # Overwrite file
         with open(INPUT_FILE, 'w') as file:
@@ -467,10 +469,29 @@ def children(child1,child2):
     rand_y = m*rand_x + c 
     new_child.append(round(rand_y))
 
-    rand_g_top = random.uniform(min(child1_well[2],child2_well[2]),max(child1_well[2],child2_well[2]))
-    new_child.append(round(rand_g_top))
-    rand_g_bottom = random.uniform(min(child1_well[3],child2_well[3]),max(child1_well[3],child2_well[3]))
-    new_child.append(round(rand_g_bottom))
+    #rand_g_top = random.uniform(min(child1_well[2],child2_well[2]),max(child1_well[2],child2_well[2]))
+    #new_child.append(round(rand_g_top))
+    #rand_g_bottom = random.uniform(min(child1_well[3],child2_well[3]),max(child1_well[3],child2_well[3]))
+    #new_child.append(round(rand_g_bottom))
+    
+    #conversion to binary format
+    bin_well1 = format(int(child1_well[2]),"b")
+    bin_well2 = format(int(child2_well[2]),"b")
+
+    if len(bin_well1)<64:
+        bin_padding = 64 - len(bin_well1)
+        bin_well1.zfill(bin_padding)
+    
+    if len(bin_well2)<64:
+        bin_padding = 64 - len(bin_well2)
+        bin_well1.zfill(bin_padding)
+
+    pos = int(random.random()*64) 
+    bin_child = bin_well1[:pos]+bin_well2[pos:] #crossover  #(bin_well2[:pos]+bin_well1[pos:])
+
+    #conversion into int
+    bin_child = int(bin_child,2)
+    new_child.append(bin_child)
 
   return new_child
 
@@ -478,8 +499,12 @@ def children(child1,child2):
 def in_bounds(new_child,min_bound,max_bound):
     num=0
     for i in range(len(new_child)):
-        if (min_bound<new_child[i]<max_bound):
-            num+=1
+        if i<2:
+            if (min_bound<new_child[i]<max_bound):
+                num+=1
+        else:
+            if (0<new_child[i]<18446744073709551616):
+                num+=1
     
     if num == len(new_child):
         return True
@@ -553,7 +578,7 @@ def eaAlgorithm_by_steps(pop, toolbox, CXPB, MUTPB, NGEN, halloffame):
                     #expand search with radius dependent on r_count
                     else:
                         #new_child = children(child1,child2)
-                        for i in range(len(new_child)):
+                        for i in range(2):
                             print('the random number is', random.uniform(-r_count, r_count))
                             new_child[i] += random.uniform(-r_count, r_count)
                             #new_child[i] += random.uniform(0, r_count)
@@ -561,8 +586,9 @@ def eaAlgorithm_by_steps(pop, toolbox, CXPB, MUTPB, NGEN, halloffame):
 
                     #mutate (manual)
                     if random.random() <= CXPB:
-                        index = random.randint(0, len(new_child) - 1)
+                        index = random.randint(0, 1)
                         new_child[index] += space_search_random(MIN_Halite, MAX_Halite)
+                        new_child[2] += random.randint(0, 18446744073709551615)
 
                     np_child = list(new_child)
 
@@ -570,10 +596,10 @@ def eaAlgorithm_by_steps(pop, toolbox, CXPB, MUTPB, NGEN, halloffame):
 
                     #dont need feasiblity check if sampling comes after mutation
 
-                    if (feasible(np_child)) and (new_child not in history_success_offspring) and (new_child[3]>new_child[2]) and (new_child[7]>new_child[6]) and in_bounds(new_child,MIN_Halite,MAX_Halite):
+                    if (feasible(np_child)) and (new_child not in history_success_offspring) and in_bounds(new_child,MIN_Halite,MAX_Halite):
                         print('this feasibility should be true:', feasible(np_child))
                         feasibility_flag+=1
-                        print('success is', new_child)
+                        print('converted success is', convert_instance(new_child))
                         deap_new_child = creator.Individual(new_child)
                         success_offspring.insert(0,deap_new_child)
                         history_success_offspring.append(new_child)
@@ -583,8 +609,8 @@ def eaAlgorithm_by_steps(pop, toolbox, CXPB, MUTPB, NGEN, halloffame):
                     else:
                         r_count+=1
                         print('fail with r_count=', r_count)
-                        print('and failed child is', new_child)
-                        print('and child copy is', new_child_copy)
+                        #print('and failed child is', new_child)
+                        #print('and child copy is', new_child_copy)
                         new_child = new_child_copy.copy()
                         time.sleep(5)
 
@@ -780,27 +806,42 @@ def checkBounds(MIN_Halite, MAX_Halite):
                     # First two variables of a location to study are the X and Y locations
                     for i in range(Nwells - 1):
                         Xorig = np.asanyarray(child[i * Nvar:i * Nvar + Nvar])
+                        Xorig = Xorig[0:2] #take only coordinates 
                         for j in range(Nwells):
                             if j == i: continue  # Ignore itself!
                             Xother = np.asanyarray(child[j * Nvar:j * Nvar + Nvar])
+                            Xother = Xother[0:2] #take only coordinates
                             dist = (np.dot(Xorig - Xother, Xorig - Xother)) ** 0.5
                             if dist < Halite_options.mind_the_gap:
                                 if abs(dist) < spatial_precision:  # Move the node away
                                     Xother[0] = Xother[0] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
                                     Xother[1] = Xother[1] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
-                                    Xother[2] = Xother[2] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
-                                    Xother[3] = Xother[3] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
+                                    #Xother[2] = Xother[2] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
+                                    #Xother[3] = Xother[3] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
                                 else:
                                     # Move node to new position
                                     Xother = (Xother - Xorig) * Halite_options.mind_the_gap / dist + Xother
                                 # Ensure that the node is in the space of search
                                 child[j * Nwells] = (np.int(Xother[0]) / spatial_precision) * spatial_precision
                                 child[j * Nwells + 1] = (np.int(Xother[1]) / spatial_precision) * spatial_precision
-                for i in range(len(child)):
-                    if child[i] > MAX_Halite:
-                        child[i] = MAX_Halite
-                    elif child[i] < MIN_Halite:
-                        child[i] = MIN_Halite
+                
+                for i in range(Nwells):
+                    if child[i * Nwells] > MAX_Halite:
+                        child[i * Nwells] = MAX_Halite
+                    if child[i * Nwells + 1] > MAX_Halite:
+                        child[i * Nwells] = MAX_Halite
+                
+                for i in range(Nwells):
+                    if child[i * Nwells] < MIN_Halite:
+                        child[i * Nwells] = MIN_Halite
+                    if child[i * Nwells + 1] < MIN_Halite:
+                        child[i * Nwells] = MIN_Halite
+                    
+                for i in range(Nwells):
+                    if child[i * Nwells + 2] < 1:
+                        child[i * Nwells + 2] = 1
+                    elif child[i * Nwells + 2] > 18446744073709551615:
+                        child[i * Nwells + 2] = 18446744073709551615
             return offspring
         return wrapper
     return decorator
@@ -808,29 +849,49 @@ def checkBounds(MIN_Halite, MAX_Halite):
 
 
 def convert_instance(instance):
-    j =0
+    #j =0
     instance_back = copy.deepcopy(instance)
-    for i in range(len(instance)):
-        print('instance initially is', instance_back[i], 'with i:',i , 'max limit=', Halite_options.ga_variables[j].max_limit)
-        #if i == 0: continue #Ignore first because it is the reference
-        instance_back[i] = linear_converter(instance_back[i], MIN_Halite, MAX_Halite,
-                         Halite_options.ga_variables[j].min_limit, Halite_options.ga_variables[j].max_limit)
-        j += 1
-        #Restart j so it iterates over values per location
-        print('now instance back is', instance_back[i])
-        if j%(len(instance_back)/ Halite_options.ga_locations_to_study)==0: j = 0
+
+    #Nvar = len(Halite_options.ga_variables)
+    Nwells = Halite_options.ga_locations_to_study
+
+    for j in range(Nwells): # convert only coordinates
+        instance_back[j*Nwells] = linear_converter(instance_back[j*Nwells], MIN_Halite, MAX_Halite, Halite_options.ga_variables[0].min_limit, Halite_options.ga_variables[0].max_limit)
+        instance_back[j*Nwells +1] = linear_converter(instance_back[j*Nwells+1], MIN_Halite, MAX_Halite, Halite_options.ga_variables[1].min_limit, Halite_options.ga_variables[1].max_limit)
+
+    # for i in range(len(instance)):
+    #     print('instance initially is', instance_back[i], 'with i:',i , 'max limit=', Halite_options.ga_variables[j].max_limit)
+    #     #if i == 0: continue #Ignore first because it is the reference
+    #     instance_back[i] = linear_converter(instance_back[i], MIN_Halite, MAX_Halite,
+    #                      Halite_options.ga_variables[j].min_limit, Halite_options.ga_variables[j].max_limit)
+    #     j += 1
+    #     #Restart j so it iterates over values per location
+    #     print('now instance back is', instance_back[i])
+    #     if j%(len(instance_back)/ Halite_options.ga_locations_to_study)==0: j = 0
+    
     return instance_back
+
 def convert_instance_back(instance):
-    j = 0
+    #j = 0
     instance_back = copy.deepcopy(instance)
-    for i in range(len(instance)):
-        #if i == 0: continue #Ignore first because it is the reference
-        instance_back[i] = linear_converter(instance_back[i], Halite_options.ga_variables[j].min_limit,
-                        Halite_options.ga_variables[j].max_limit, MIN_Halite, MAX_Halite)
-        j += 1
-        #Restart j so it iterates over values per location
-        if j%(len(instance_back)/ Halite_options.ga_locations_to_study)==0: j = 0
+
+    Nwells = Halite_options.ga_locations_to_study
+
+    for j in range(Nwells): # convert only coordinates
+        instance_back[j*Nwells] = linear_converter(instance_back[j*Nwells], Halite_options.ga_variables[0].min_limit,Halite_options.ga_variables[0].max_limit, MIN_Halite, MAX_Halite)
+        instance_back[j*Nwells +1] = linear_converter(instance_back[j*Nwells+1], Halite_options.ga_variables[1].min_limit,Halite_options.ga_variables[1].max_limit, MIN_Halite, MAX_Halite)
+
+    # for i in range(len(instance)):
+    #     #if i == 0: continue #Ignore first because it is the reference
+    #     instance_back[i] = linear_converter(instance_back[i], Halite_options.ga_variables[j].min_limit,Halite_options.ga_variables[j].max_limit, MIN_Halite, MAX_Halite)
+    #     j += 1
+    #     #Restart j so it iterates over values per location
+    #     if j%(len(instance_back)/ Halite_options.ga_locations_to_study)==0: j = 0
+    
     return instance_back
+
+
+
 def linear_converter(old_var, old_min, old_max, new_min, new_max):
     if new_max == old_max and new_min == old_min:
         val = old_var
@@ -948,34 +1009,37 @@ def create_child_with_probability(parent):
 
 #     else:
 #         return False
+# def feasible(instance):
+#     Nvar = len(Halite_options.ga_variables) #3
+#     Nwells = Halite_options.ga_locations_to_study #2
+#     overall_N_count = 0
+#     for i in range(Nwells):
+#         N_count = 0
+#         well = instance[i*Nvar: i*Nvar + Nvar]
+#         if well[0] in coords_copy[:,0]:
+#             #print(well[0])
+#             index_values = np.argwhere(coords_copy[:,0] == well[0])
+#             #print(coords_copy[:,1][index_values])
+#             for n in range(-spatial_precision,spatial_precision):
+#               if well[1]+n in coords_copy[:,1][index_values]:
+#                 N_count+=1
+        
+#         if N_count> 0:
+#           overall_N_count+=1
+#             # for j in range(1,Nvar):
+#             #     if well[j] in coords_copy[:,j][index_values]:
+#             #         N_count+=1 
+        
+#         #print(overall_N_count)
+
+#     if overall_N_count == Nwells:
+#         return True
+
+#     else:
+#         return False
+
 def feasible(instance):
-    Nvar = len(Halite_options.ga_variables) #3
-    Nwells = Halite_options.ga_locations_to_study #2
-    overall_N_count = 0
-    for i in range(Nwells):
-        N_count = 0
-        well = instance[i*Nvar: i*Nvar + Nvar]
-        if well[0] in coords_copy[:,0]:
-            #print(well[0])
-            index_values = np.argwhere(coords_copy[:,0] == well[0])
-            #print(coords_copy[:,1][index_values])
-            for n in range(-spatial_precision,spatial_precision):
-              if well[1]+n in coords_copy[:,1][index_values]:
-                N_count+=1
-        
-        if N_count> 0:
-          overall_N_count+=1
-            # for j in range(1,Nvar):
-            #     if well[j] in coords_copy[:,j][index_values]:
-            #         N_count+=1 
-        
-        #print(overall_N_count)
-
-    if overall_N_count == Nwells:
-        return True
-
-    else:
-        return False
+    return True
 
 # Drop the first element,
 # which will be replace by our initial guess.
