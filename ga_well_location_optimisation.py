@@ -396,7 +396,17 @@ def fitness(instance):
             total_coldwell_TR_quotient = float(np.sum(TR_coldwell_quotient))
 
             total_hotwell_TR_divisor = float(np.sum(TR_hotwell_divisor))
+
+            # if total_hotwell_TR_divisor < 0.1:
+            #     total_hotwell_TR_divisor = 0.1 
+            #     print('time too short')
+
             total_coldwell_TR_divisor = float(np.sum(TR_coldwell_divisor))
+
+            # if total_coldwell_TR_divisor < 0.1:
+            #     total_coldwell_TR_divisor = 0.1 
+            #     print('time too short')
+
 
             #average_hotwell_watts = float(float(np.sum(hotwell_watts))/len(hotwell_watts))
 
@@ -409,7 +419,7 @@ def fitness(instance):
             #print('total_coldwell_TR_divisor is',total_coldwell_TR_divisor)
 
             if total_hotwell_TR_divisor == 0.:
-                print('test')
+                
                 cold_TR = total_coldwell_TR_quotient / total_coldwell_TR_divisor
 
                 average_coldwell_watts = float(float(np.sum(coldwell_watts))/len(coldwell_watts))
@@ -432,7 +442,7 @@ def fitness(instance):
                 average_coldwell_watts = float(float(np.sum(coldwell_watts))/len(coldwell_watts))
 
                 val = ((cold_TR * average_coldwell_watts) + (hot_TR * average_hotwell_watts))/2
-                #TR = (total_hotwell_TR_quotient / total_hotwell_TR_divisor) + (total_coldwell_TR_quotient / total_coldwell_TR_divisor)
+                
 
         
             
@@ -478,19 +488,44 @@ def children(child1,child2):
     bin_well1 = format(int(child1_well[2]),"b")
     bin_well2 = format(int(child2_well[2]),"b")
 
-    if len(bin_well1)<64:
-        bin_padding = 64 - len(bin_well1)
-        bin_well1.zfill(bin_padding)
-    
-    if len(bin_well2)<64:
-        bin_padding = 64 - len(bin_well2)
-        bin_well1.zfill(bin_padding)
+    #print('binwell1 type is', type(int(bin_well1)))
 
-    pos = int(random.random()*64) 
-    bin_child = bin_well1[:pos]+bin_well2[pos:] #crossover  #(bin_well2[:pos]+bin_well1[pos:])
+    bin_well1 = bin_well1.zfill(64)
+    bin_well2 = bin_well2.zfill(64)
+
+    # if len(list(bin_well1))<64:
+    #     bin_padding = 64 - len(list(bin_well1))
+    #     bin_well1.zfill(bin_padding)
+    
+    # if len(list(bin_well2))<64:
+    #     bin_padding = 64 - len(list(bin_well2))
+    #     print(bin_padding)
+    #     bin_well2.zfill(bin_padding)
+
+    # previous crossover method
+    # pos = int(random.random()*64) 
+    # bin_child = bin_well1[:pos]+bin_well2[pos:] #crossover  #(bin_well2[:pos]+bin_well1[pos:])
+
+    bin_child = ''
+
+    print('binwell1 is',bin_well1)
+    print('binwell2 is',bin_well2)
+
+    selection_array = np.random.randint(1,3,64) #if 0 take from bin_well1 and if 1 take from bin_well2
+
+    for i in range(64):
+        if selection_array[i] == 0:
+            bin_child = bin_child + str(list(bin_well1)[i])
+        else:
+            bin_child = bin_child + str(list(bin_well2)[i])
+
+    print(bin_child)
 
     #conversion into int
     bin_child = int(bin_child,2)
+
+    print(bin_child)
+
     new_child.append(bin_child)
 
   return new_child
@@ -789,62 +824,69 @@ def mutate(instance, mutpb):
     return instance,
 
 
-def checkBounds(MIN_Halite, MAX_Halite):
-    #Ensure that the results are bounded
-    # If many locations are studied and a clear distance is specified, then ensure that
-    # this is satisfied by the locations
-    Nvar = len(Halite_options.ga_variables)
-    Nwells = Halite_options.ga_locations_to_study
-    def decorator(func):
-        def wrapper(*args, **kargs):
+# def checkBounds(MIN_Halite, MAX_Halite):
+#     #Ensure that the results are bounded
+#     # If many locations are studied and a clear distance is specified, then ensure that
+#     # this is satisfied by the locations
+#     Nvar = len(Halite_options.ga_variables)
+#     Nwells = Halite_options.ga_locations_to_study
+#     def decorator(func):
+#         def wrapper(*args, **kargs):
 
-            offspring = func(*args, **kargs)
-            for child in offspring:
-                #Ensure that wells are not too close
-                # Perform this by "pushing" wells that are too close
-                if Halite_options.mind_the_gap > 0:
-                    # First two variables of a location to study are the X and Y locations
-                    for i in range(Nwells - 1):
-                        Xorig = np.asanyarray(child[i * Nvar:i * Nvar + Nvar])
-                        Xorig = Xorig[0:2] #take only coordinates 
-                        for j in range(Nwells):
-                            if j == i: continue  # Ignore itself!
-                            Xother = np.asanyarray(child[j * Nvar:j * Nvar + Nvar])
-                            Xother = Xother[0:2] #take only coordinates
-                            dist = (np.dot(Xorig - Xother, Xorig - Xother)) ** 0.5
-                            if dist < Halite_options.mind_the_gap:
-                                if abs(dist) < spatial_precision:  # Move the node away
-                                    Xother[0] = Xother[0] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
-                                    Xother[1] = Xother[1] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
-                                    #Xother[2] = Xother[2] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
-                                    #Xother[3] = Xother[3] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
-                                else:
-                                    # Move node to new position
-                                    Xother = (Xother - Xorig) * Halite_options.mind_the_gap / dist + Xother
-                                # Ensure that the node is in the space of search
-                                child[j * Nwells] = (np.int(Xother[0]) / spatial_precision) * spatial_precision
-                                child[j * Nwells + 1] = (np.int(Xother[1]) / spatial_precision) * spatial_precision
+#             offspring = func(*args, **kargs)
+#             for child in offspring:
+#                 #Ensure that wells are not too close
+#                 # Perform this by "pushing" wells that are too close
+#                 if Halite_options.mind_the_gap > 0:
+#                     # First two variables of a location to study are the X and Y locations
+#                     for i in range(Nwells - 1):
+#                         Xorig = np.asanyarray(child[i * Nvar:i * Nvar + Nvar])
+#                         Xorig = Xorig[0:2] #take only coordinates 
+#                         for j in range(Nwells):
+#                             if j == i: continue  # Ignore itself!
+#                             Xother = np.asanyarray(child[j * Nvar:j * Nvar + Nvar])
+#                             Xother = Xother[0:2] #take only coordinates
+#                             dist = (np.dot(Xorig - Xother, Xorig - Xother)) ** 0.5
+#                             if dist < Halite_options.mind_the_gap:
+#                                 if abs(dist) < spatial_precision:  # Move the node away
+#                                     Xother[0] = Xother[0] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
+#                                     Xother[1] = Xother[1] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
+#                                     #Xother[2] = Xother[2] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
+#                                     #Xother[3] = Xother[3] + (-1) ** random.randrange(2) * Halite_options.mind_the_gap
+#                                 else:
+#                                     # Move node to new position
+#                                     Xother = (Xother - Xorig) * Halite_options.mind_the_gap / dist + Xother
+#                                 # Ensure that the node is in the space of search
+#                                 print('Xother0 is', Xother[0])
+#                                 print('Xother1 is', Xother[1])
+#                                 print('j * Nwells is', j * Nwells)
+#                                 #child[j * Nwells] = (np.int(Xother[0]) / spatial_precision) * spatial_precision
+#                                 #child[j * Nwells + 1] = (np.int(Xother[1]) / spatial_precision) * spatial_precision
                 
-                for i in range(Nwells):
-                    if child[i * Nwells] > MAX_Halite:
-                        child[i * Nwells] = MAX_Halite
-                    if child[i * Nwells + 1] > MAX_Halite:
-                        child[i * Nwells] = MAX_Halite
                 
-                for i in range(Nwells):
-                    if child[i * Nwells] < MIN_Halite:
-                        child[i * Nwells] = MIN_Halite
-                    if child[i * Nwells + 1] < MIN_Halite:
-                        child[i * Nwells] = MIN_Halite
+#                 for i in range(Nwells):
+#                     #for x coord
+#                     if child[i * Nvar] > MAX_Halite:
+#                         child[i * Nvar] = MAX_Halite
+#                     if child[i * Nvar] > MAX_Halite:
+#                         child[i * Nvar] = MAX_Halite
+                
+#                 for i in range(Nwells):
+#                     #for y coord
+#                     if child[i * Nvar + 1] < MIN_Halite:
+#                         child[i * Nvar + 1] = MIN_Halite
+#                     if child[i * Nvar + 1] < MIN_Halite:
+#                         child[i * Nvar + 1] = MIN_Halite
                     
-                for i in range(Nwells):
-                    if child[i * Nwells + 2] < 1:
-                        child[i * Nwells + 2] = 1
-                    elif child[i * Nwells + 2] > 18446744073709551615:
-                        child[i * Nwells + 2] = 18446744073709551615
-            return offspring
-        return wrapper
-    return decorator
+#                 for i in range(Nwells):
+#                     #for gamma
+#                     if child[i * Nvar + 2] < 1:
+#                         child[i * Nvar + 2] = 1
+#                     elif child[i * Nvar + 2] > 18446744073709551615:
+#                         child[i * Nvar + 2] = 18446744073709551615
+#             return offspring
+#         return wrapper
+#     return decorator
 
 
 
@@ -1021,7 +1063,7 @@ def create_child_with_probability(parent):
 #             index_values = np.argwhere(coords_copy[:,0] == well[0])
 #             #print(coords_copy[:,1][index_values])
 #             for n in range(-spatial_precision,spatial_precision):
-#               if well[1]+n in coords_copy[:,1][index_values]:
+#               if well[1]+n in coords_copy[:,1][index_values]: ##spational precision check? (np.int(Xother[0]) / spatial_precision) * spatial_precision
 #                 N_count+=1
         
 #         if N_count> 0:
@@ -1164,7 +1206,7 @@ def create_best_folders(halloffame):
         foldername = get_folder_name(halloffame[k])
         #Copy vtu file in order
         os.system("cp "+ foldername + "/" +vtufile + " " + newfoldername+ "/" +"best_result_ranked_" + str(k+1)+".vtu")
-        #Copy production .csv file
+        #Copy production .csv fill
         os.system("cp "+ foldername + "/" +prod_file + " " + newfoldername+ "/" +"best_result_ranked_" + str(k+1)+".csv")
 
     return
@@ -1177,10 +1219,10 @@ def setup():
     toolbox.register("individual", tools.initRepeat, creator.Individual,
                      toolbox.attribute, n=len(Halite_options.ga_variables)*Halite_options.ga_locations_to_study)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-    toolbox.register("mate", tools.cxOnePoint)
-    toolbox.register("mutate", mutate, mutpb=Halite_options.ga_mutation_prob)
-    toolbox.decorate("mate", checkBounds(MIN_Halite, MAX_Halite))
-    toolbox.decorate("mutate", checkBounds(MIN_Halite, MAX_Halite))
+    #toolbox.register("mate", tools.cxOnePoint)
+    #toolbox.register("mutate", mutate, mutpb=Halite_options.ga_mutation_prob)
+    #toolbox.decorate("mate", checkBounds(MIN_Halite, MAX_Halite))
+    #toolbox.decorate("mutate", checkBounds(MIN_Halite, MAX_Halite))
 
 
     if Halite_options.ga_selection_method == 1:
