@@ -13,7 +13,7 @@ import libspud
 from exodus2gmsh import convertExodusII2MSH
 from PIL import Image
 
-#population_factor = 5
+aquifer_layers = 2
 
 fp = '/home/hf116/Desktop/corrected_masked_imperial.jpg'
 w_dim = 520 #width of imperial space
@@ -460,88 +460,101 @@ from numpy import ones,vstack
 from numpy.linalg import lstsq
 
 def children(child1,child2):
-  Nvar = len(Halite_options.ga_variables)
-  Nwells = Halite_options.ga_locations_to_study
-  new_child = []
+    Nvar = len(Halite_options.ga_variables)
+    Nwells = Halite_options.ga_locations_to_study
+    new_child = []
 
-  for i in range(Nwells):
-    child1_well = child1[i * Nvar:i * Nvar + Nvar]
-    child2_well = child2[i * Nvar:i * Nvar + Nvar]
+    for i in range(Nwells):
+        child1_well = child1[i * Nvar:i * Nvar + Nvar]
+        child2_well = child2[i * Nvar:i * Nvar + Nvar]
   
-    x_coords = (child1_well[0], child2_well[0])
-    y_coords = (child1_well[1], child2_well[1])
+        x_coords = (child1_well[0], child2_well[0])
+        y_coords = (child1_well[1], child2_well[1])
 
-    A = vstack([x_coords,ones(len(x_coords))]).T
-    m, c = lstsq(A, y_coords)[0]
+        A = vstack([x_coords,ones(len(x_coords))]).T
+        m, c = lstsq(A, y_coords)[0]
 
-    rand_x =random.uniform(min(child1_well[0],child2_well[0]),max(child1_well[0],child2_well[0]))
-    new_child.append(round(rand_x))
-    rand_y = m*rand_x + c 
-    new_child.append(round(rand_y))
+        random.seed(None)
+        rand_x =random.uniform(min(child1_well[0],child2_well[0]),max(child1_well[0],child2_well[0]))
+        new_child.append(round(rand_x))
+        rand_y = m*rand_x + c 
+        new_child.append(round(rand_y))
 
-    #rand_g_top = random.uniform(min(child1_well[2],child2_well[2]),max(child1_well[2],child2_well[2]))
-    #new_child.append(round(rand_g_top))
-    #rand_g_bottom = random.uniform(min(child1_well[3],child2_well[3]),max(child1_well[3],child2_well[3]))
-    #new_child.append(round(rand_g_bottom))
+        print('new_child created', new_child)
+
+        #rand_g_top = random.uniform(min(child1_well[2],child2_well[2]),max(child1_well[2],child2_well[2]))
+        #new_child.append(round(rand_g_top))
+        #rand_g_bottom = random.uniform(min(child1_well[3],child2_well[3]),max(child1_well[3],child2_well[3]))
+        #new_child.append(round(rand_g_bottom))
     
-    #conversion to binary format
-    bin_well1 = format(int(child1_well[2]),"b")
-    bin_well2 = format(int(child2_well[2]),"b")
+        #conversion to binary format
+        bin_well1 = format(int(child1_well[2]),"b")
+        bin_well2 = format(int(child2_well[2]),"b")
 
-    #print('binwell1 type is', type(int(bin_well1)))
+        bin_well1 = bin_well1.zfill(64)
+        bin_well2 = bin_well2.zfill(64)
 
-    bin_well1 = bin_well1.zfill(64)
-    bin_well2 = bin_well2.zfill(64)
+        print('binwell1 is',bin_well1)
+        print('binwell2 is',bin_well2)
 
-    # if len(list(bin_well1))<64:
-    #     bin_padding = 64 - len(list(bin_well1))
-    #     bin_well1.zfill(bin_padding)
-    
-    # if len(list(bin_well2))<64:
-    #     bin_padding = 64 - len(list(bin_well2))
-    #     print(bin_padding)
-    #     bin_well2.zfill(bin_padding)
+        wells_open = False
+        it_loop = 0
 
-    # previous crossover method
-    # pos = int(random.random()*64) 
-    # bin_child = bin_well1[:pos]+bin_well2[pos:] #crossover  #(bin_well2[:pos]+bin_well1[pos:])
+        while wells_open == False:
 
-    bin_child = ''
+            bin_child = ''
 
-    print('binwell1 is',bin_well1)
-    print('binwell2 is',bin_well2)
+            random.seed(None)
+            selection_array = np.random.randint(0,2,64) #if 0 take from bin_well1 and if 1 take from bin_well2
+            print('random num is', selection_array)
 
-    selection_array = np.random.randint(1,3,64) #if 0 take from bin_well1 and if 1 take from bin_well2
+            for i in range(64):
+                if selection_array[i] == 0:
+                    bin_child = bin_child + str(list(bin_well1)[i])
+                else:
+                    bin_child = bin_child + str(list(bin_well2)[i])
 
-    for i in range(64):
-        if selection_array[i] == 0:
-            bin_child = bin_child + str(list(bin_well1)[i])
-        else:
-            bin_child = bin_child + str(list(bin_well2)[i])
+            if it_loop==10000:
+                for k in range(aquifer_layers):
+                    list(bin_child)[-1*k] = 1
+                        
+            for j in range(aquifer_layers):
+                    it_loop +=1
+                    
+                    print(it_loop)
+                    if int(list(bin_child)[-1*j]) == 1:
+                        bin_child = int(bin_child,2) #conversion into int
+                        print('satisfied bin_child',bin_child)
+                        new_child.append(bin_child)
+                        wells_open = True
+                      
+    print('new child is in here is ',new_child)
 
-    print(bin_child)
-
-    #conversion into int
-    bin_child = int(bin_child,2)
-
-    print(bin_child)
-
-    new_child.append(bin_child)
-
-  return new_child
+    return new_child
 
 
 def in_bounds(new_child,min_bound,max_bound):
-    num=0
-    for i in range(len(new_child)):
-        if i<2:
-            if (min_bound<new_child[i]<max_bound):
-                num+=1
-        else:
-            if (0<new_child[i]<18446744073709551616):
-                num+=1
-    
+    Nvar = len(Halite_options.ga_variables)
+    Nwells = Halite_options.ga_locations_to_study
+
+    num = 0
+
+    print('new child is',new_child)
+
+    for i in range(Nwells):
+        one_well = new_child[i * Nvar:i * Nvar + Nvar]
+        print('one well is', one_well)
+
+        for j in range(Nvar):
+            if j<2:
+                if (min_bound<one_well[i]<max_bound):
+                    num+=1
+            else:
+                if (0<new_child[i]<18446744073709551616):
+                    num+=1
+
     if num == len(new_child):
+        print('bounds satisfied')
         return True
     else:
         return False
@@ -1030,7 +1043,7 @@ def create_child_with_probability(parent):
   return new_child
 
 #for depth-included wells, need to check order of coords!!!
-# def feasible(instance):
+# def old_feasible(instance):
 #     Nvar = len(Halite_options.ga_variables)
 #     Nwells = Halite_options.ga_locations_to_study
 #     overall_N_count = 0
@@ -1051,37 +1064,38 @@ def create_child_with_probability(parent):
 
 #     else:
 #         return False
-# def feasible(instance):
-#     Nvar = len(Halite_options.ga_variables) #3
-#     Nwells = Halite_options.ga_locations_to_study #2
-#     overall_N_count = 0
-#     for i in range(Nwells):
-#         N_count = 0
-#         well = instance[i*Nvar: i*Nvar + Nvar]
-#         if well[0] in coords_copy[:,0]:
-#             #print(well[0])
-#             index_values = np.argwhere(coords_copy[:,0] == well[0])
-#             #print(coords_copy[:,1][index_values])
-#             for n in range(-spatial_precision,spatial_precision):
-#               if well[1]+n in coords_copy[:,1][index_values]: ##spational precision check? (np.int(Xother[0]) / spatial_precision) * spatial_precision
-#                 N_count+=1
-        
-#         if N_count> 0:
-#           overall_N_count+=1
-#             # for j in range(1,Nvar):
-#             #     if well[j] in coords_copy[:,j][index_values]:
-#             #         N_count+=1 
-        
-#         #print(overall_N_count)
-
-#     if overall_N_count == Nwells:
-#         return True
-
-#     else:
-#         return False
 
 def feasible(instance):
-    return True
+    Nvar = len(Halite_options.ga_variables) #3
+    Nwells = Halite_options.ga_locations_to_study #2
+    overall_N_count = 0
+    for i in range(Nwells):
+        N_count = 0
+        well = instance[i*Nvar: i*Nvar + Nvar]
+        if well[0] in coords_copy[:,0]:
+            #print(well[0])
+            index_values = np.argwhere(coords_copy[:,0] == well[0])
+            #print(coords_copy[:,1][index_values])
+            for n in range(-spatial_precision,spatial_precision):
+              if well[1]+n in coords_copy[:,1][index_values]: ##spational precision check? (np.int(Xother[0]) / spatial_precision) * spatial_precision
+                N_count+=1
+        
+        if N_count> 0:
+          overall_N_count+=1
+            # for j in range(1,Nvar):
+            #     if well[j] in coords_copy[:,j][index_values]:
+            #         N_count+=1 
+        
+        #print(overall_N_count)
+
+    if overall_N_count == Nwells:
+        return True
+
+    else:
+        return False
+
+# def feasible(instance):
+#     return True
 
 # Drop the first element,
 # which will be replace by our initial guess.
