@@ -13,12 +13,104 @@ import libspud
 from exodus2gmsh import convertExodusII2MSH
 from PIL import Image
 
-aquifer_layers = 2
+#aquifer_layers = 2
+best_can_dic= {}
+previous_list = []
 
-fp = '/home/hf116/Desktop/corrected_masked_imperial.jpg'
-w_dim = 520 #width of imperial space
-h_dim = 360 #height of imperial space
-bounding_thickness = 500 #(so Halite_max and Halite_min values is based on this ie. min = 50 and max = 50 + w_dim)
+import vtk
+import sys
+from math import *
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy import interpolate
+from scipy.interpolate import interp1d
+import os
+
+
+def get_value_at_coord(filename, data_name, X, Y, Z):
+    #This function extracts the input data_name and also the Time
+    # this is to plot the field versus time
+
+    #Position of the probe
+    x0 = X
+    x1 = x0
+
+    y0 = Y
+    y1 = y0
+
+    z0 = Z
+    z1 = z0
+    #Just one probe
+    resolution = 1
+
+    # serial
+    reader = vtk.vtkXMLUnstructuredGridReader()
+    reader.SetFileName(filename)
+    #reader.SetFileName(filename+'_'+str(vtu_number)+'.vtu')
+
+    ugrid = reader.GetOutputPort()
+
+    ###########Create the probe line#############
+    FS=[]  
+    Time = []          
+    detector = []
+
+    hx = (x1 - x0) / resolution
+    hy = (y1 - y0) / resolution
+    hz = (z1 - z0) / resolution
+
+    Experimental_X = []
+    for i in range(resolution+1):
+        detector.append([hx * i + x0, hy * i + y0, hz * i + z0])
+        Experimental_X.append(hx * i + x0)
+
+    points = vtk.vtkPoints()
+    points.SetDataTypeToDouble()
+
+    for i in range(len(detector)):
+        points.InsertNextPoint(detector[i][0], detector[i][1], detector[i][2])
+
+    detectors = vtk.vtkPolyData()
+    detectors.SetPoints(points)    
+
+    ###########Create the probe line end#############
+
+    for i in range(len(detector)):
+        points.InsertNextPoint(detector[i][0], detector[i][1], detector[i][2])
+
+
+    detectors = vtk.vtkPolyData()
+    detectors.SetPoints(points)
+
+
+    probe = vtk.vtkProbeFilter()
+    probe.SetInputConnection(ugrid)
+
+
+    probe.SetSourceConnection(ugrid)
+    probe.SetInputData(detectors)
+    probe.Update()
+
+    data = probe.GetOutput()
+
+    for j in range(points.GetNumberOfPoints()):
+        FS.append(  data.GetPointData().GetScalars(data_name).GetTuple(j))
+
+    for j in range(points.GetNumberOfPoints()):
+        Time.append(  data.GetPointData().GetScalars('phase1::Time').GetTuple(j))
+    
+    return [FS[0],Time[0]]
+    
+data_name = 'phase2::Pressure'
+#These are the coordinates from which the data will be extracted
+X = [260.635]
+Y = [219.497]
+Z = [-82]
+
+#fp = '/home/hf116/Desktop/corrected_masked_imperial.jpg'
+#w_dim = 520 #width of imperial space
+#h_dim = 360 #height of imperial space
+#bounding_thickness = 500 #(so Halite_max and Halite_min values is based on this ie. min = 50 and max = 50 + w_dim)
 
 #Read Halite options, for the time being just so we can call the same subroutines
 # read in the Halite options
@@ -60,7 +152,7 @@ def analyse_results(instance):
     cwd = os.getcwd()
     foldername = get_folder_name(instance)
     try:
-        timeList, prod, inject, prod_temp, inject_temp, TR_hotwell_quotient, TR_coldwell_quotient, TR_hotwell_divisor, TR_coldwell_divisor, hotwell_watts, coldwell_watts = get_productions_and_injections(prod_file, geothermal, foldername, cwd)
+        timeList, prod, inject, prod_temp, inject_temp, TR_hotwell_quotient, TR_coldwell_quotient, TR_hotwell_divisor, TR_coldwell_divisor, hotwell_watts, coldwell_watts, pressure_drop = get_productions_and_injections(prod_file, geothermal, foldername, cwd)
     except:
         os.chdir(cwd)
         print("WARNING: Failed to load production files.")
@@ -84,7 +176,7 @@ def analyse_results(instance):
         os.chdir(cwd)
         print("WARNING: Failed to obtain walltime")
 
-    return timeList, prod, inject, prod_temp, inject_temp, walltime, TR_hotwell_quotient, TR_coldwell_quotient, TR_hotwell_divisor, TR_coldwell_divisor, hotwell_watts, coldwell_watts
+    return timeList, prod, inject, prod_temp, inject_temp, walltime, TR_hotwell_quotient, TR_coldwell_quotient, TR_hotwell_divisor, TR_coldwell_divisor, hotwell_watts, coldwell_watts, pressure_drop
 
 
 def get_folder_name(instance):
@@ -223,6 +315,15 @@ def get_productions_and_injections(prod_file, geothermal, foldername, cwd):
     nPhases = libspud.option_count('/material_phase')
     ##Get into the folder
     os.chdir(foldername)
+
+    value = get_value_at_coord('model_1.vtu', data_name,  X[0],Y[0],Z[0])
+
+    value_after = get_value_at_coord('model_6.vtu', data_name,  X[0],Y[0],Z[0])
+
+    print('pressure_drop is', float(value[0][0])-float(value_after[0][0]))
+
+    pressure_drop = float(value[0][0])-float(value_after[0][0])
+
     String_id = "-S"
     String_prod = "- Volume rate"
 
@@ -371,14 +472,14 @@ def get_productions_and_injections(prod_file, geothermal, foldername, cwd):
                 continue
     ##Return to original path
     os.chdir(cwd)
-    return timeList, prod, inject, prod_temp, inject_temp, TR_hotwell_quotient, TR_coldwell_quotient, TR_hotwell_divisor, TR_coldwell_divisor, hotwell_watts, coldwell_watts
+    return timeList, prod, inject, prod_temp, inject_temp, TR_hotwell_quotient, TR_coldwell_quotient, TR_hotwell_divisor, TR_coldwell_divisor, hotwell_watts, coldwell_watts, pressure_drop
 
 
 #Function that evaluates the functional
 #A penalty function can easily added here by providing a bad value if a requirement is not fulfilled
 def fitness(instance):
     global  fitness_val
-    timeList, prod, inject, prod_temp, inject_temp, walltime, TR_hotwell_quotient, TR_coldwell_quotient, TR_hotwell_divisor, TR_coldwell_divisor, hotwell_watts, coldwell_watts = analyse_results(instance)  # Only analyse
+    timeList, prod, inject, prod_temp, inject_temp, walltime, TR_hotwell_quotient, TR_coldwell_quotient, TR_hotwell_divisor, TR_coldwell_divisor, hotwell_watts, coldwell_watts, pressure_drop = analyse_results(instance)  # Only analyse
     if len(Halite_options.ga_fitness_functional) > 1:
         val = 0.
         try:
@@ -392,62 +493,53 @@ def fitness(instance):
             print("#############################################################################")
     else:
         if geothermal:
-            total_hotwell_TR_quotient = float(np.sum(TR_hotwell_quotient))
-            total_coldwell_TR_quotient = float(np.sum(TR_coldwell_quotient))
+            val = abs(pressure_drop-52679.70)
+            # total_hotwell_TR_quotient = float(np.sum(TR_hotwell_quotient))
+            # total_coldwell_TR_quotient = float(np.sum(TR_coldwell_quotient))
 
-            total_hotwell_TR_divisor = float(np.sum(TR_hotwell_divisor))
+            # total_hotwell_TR_divisor = float(np.sum(TR_hotwell_divisor))
+            # total_coldwell_TR_divisor = float(np.sum(TR_coldwell_divisor))
 
-            # if total_hotwell_TR_divisor < 0.1:
-            #     total_hotwell_TR_divisor = 0.1 
-            #     print('time too short')
+            # #average_hotwell_watts = float(float(np.sum(hotwell_watts))/len(hotwell_watts))
 
-            total_coldwell_TR_divisor = float(np.sum(TR_coldwell_divisor))
+            # #average_coldwell_watts = float(float(np.sum(coldwell_watts))/len(coldwell_watts))
 
-            # if total_coldwell_TR_divisor < 0.1:
-            #     total_coldwell_TR_divisor = 0.1 
-            #     print('time too short')
+            # #print('len(coldwell_watts)', len(coldwell_watts))
+            # #print('coldwell_watts is',coldwell_watts)
 
+            # #print('total_coldwell_TR_quotient is',total_coldwell_TR_quotient)
+            # #print('total_coldwell_TR_divisor is',total_coldwell_TR_divisor)
 
-            #average_hotwell_watts = float(float(np.sum(hotwell_watts))/len(hotwell_watts))
+            # if total_hotwell_TR_divisor == 0.:
+            #     print('test')
+            #     cold_TR = total_coldwell_TR_quotient / total_coldwell_TR_divisor
 
-            #average_coldwell_watts = float(float(np.sum(coldwell_watts))/len(coldwell_watts))
+            #     average_coldwell_watts = float(float(np.sum(coldwell_watts))/len(coldwell_watts))
 
-            #print('len(coldwell_watts)', len(coldwell_watts))
-            #print('coldwell_watts is',coldwell_watts)
+            #     val = cold_TR * average_coldwell_watts #+ (hot_TR * total_coldwell_watts)
 
-            #print('total_coldwell_TR_quotient is',total_coldwell_TR_quotient)
-            #print('total_coldwell_TR_divisor is',total_coldwell_TR_divisor)
+            # elif total_coldwell_TR_divisor == 0.:
+            #     hot_TR = total_hotwell_TR_quotient / total_hotwell_TR_divisor
 
-            if total_hotwell_TR_divisor == 0.:
-                
-                cold_TR = total_coldwell_TR_quotient / total_coldwell_TR_divisor
+            #     average_hotwell_watts = float(float(np.sum(hotwell_watts))/len(hotwell_watts))
 
-                average_coldwell_watts = float(float(np.sum(coldwell_watts))/len(coldwell_watts))
-
-                val = cold_TR * average_coldwell_watts #+ (hot_TR * total_coldwell_watts)
-
-            elif total_coldwell_TR_divisor == 0.:
-                hot_TR = total_hotwell_TR_quotient / total_hotwell_TR_divisor
-
-                average_hotwell_watts = float(float(np.sum(hotwell_watts))/len(hotwell_watts))
-
-                val = hot_TR * average_hotwell_watts
+            #     val = hot_TR * average_hotwell_watts
             
-            else:
-                cold_TR = total_coldwell_TR_quotient / total_coldwell_TR_divisor
-                hot_TR = total_hotwell_TR_quotient / total_hotwell_TR_divisor
+            # else:
+            #     cold_TR = total_coldwell_TR_quotient / total_coldwell_TR_divisor
+            #     hot_TR = total_hotwell_TR_quotient / total_hotwell_TR_divisor
 
-                average_hotwell_watts = float(float(np.sum(hotwell_watts))/len(hotwell_watts))
+            #     average_hotwell_watts = float(float(np.sum(hotwell_watts))/len(hotwell_watts))
 
-                average_coldwell_watts = float(float(np.sum(coldwell_watts))/len(coldwell_watts))
+            #     average_coldwell_watts = float(float(np.sum(coldwell_watts))/len(coldwell_watts))
 
-                val = ((cold_TR * average_coldwell_watts) + (hot_TR * average_hotwell_watts))/2
-                
+            #     val = ((cold_TR * average_coldwell_watts) + (hot_TR * average_hotwell_watts))/2
+            #     #TR = (total_hotwell_TR_quotient / total_hotwell_TR_divisor) + (total_coldwell_TR_quotient / total_coldwell_TR_divisor)
 
         
             
         else:
-            val = np.sum(prod)
+            val =  abs(pressure_drop-52679.70) #np.sum(prod)
     return val,
 
 def space_search_random(MINval, MAXval):
@@ -465,19 +557,19 @@ def children(child1,child2):
     new_child = []
 
     for i in range(Nwells):
-        child1_well = child1[i * Nvar:i * Nvar + Nvar]
-        child2_well = child2[i * Nvar:i * Nvar + Nvar]
+        # child1_well = child1[i * Nvar:i * Nvar + Nvar]
+        # child2_well = child2[i * Nvar:i * Nvar + Nvar]
   
-        x_coords = (child1_well[0], child2_well[0])
-        y_coords = (child1_well[1], child2_well[1])
+        # x_coords = (child1_well[0], child2_well[0])
+        # y_coords = (child1_well[1], child2_well[1])
 
-        A = vstack([x_coords,ones(len(x_coords))]).T
-        m, c = lstsq(A, y_coords)[0]
+        # A = vstack([x_coords,ones(len(x_coords))]).T
+        # m, c = lstsq(A, y_coords)[0]
 
         random.seed(None)
-        rand_x =random.uniform(min(child1_well[0],child2_well[0]),max(child1_well[0],child2_well[0]))
+        rand_x = random.uniform(1,100) #random.uniform(min(child1_well[0],child2_well[0]),max(child1_well[0],child2_well[0]))
         new_child.append(round(rand_x))
-        rand_y = m*rand_x + c 
+        rand_y = random.uniform(1,100) #m*rand_x + c 
         new_child.append(round(rand_y))
 
         print('new_child created', new_child)
@@ -487,48 +579,48 @@ def children(child1,child2):
         #rand_g_bottom = random.uniform(min(child1_well[3],child2_well[3]),max(child1_well[3],child2_well[3]))
         #new_child.append(round(rand_g_bottom))
     
-        #conversion to binary format
-        bin_well1 = format(int(child1_well[2]),"b")
-        bin_well2 = format(int(child2_well[2]),"b")
+    #     #conversion to binary format
+    #     bin_well1 = format(int(child1_well[2]),"b")
+    #     bin_well2 = format(int(child2_well[2]),"b")
 
-        bin_well1 = bin_well1.zfill(64)
-        bin_well2 = bin_well2.zfill(64)
+    #     bin_well1 = bin_well1.zfill(64)
+    #     bin_well2 = bin_well2.zfill(64)
 
-        print('binwell1 is',bin_well1)
-        print('binwell2 is',bin_well2)
+    #     print('binwell1 is',bin_well1)
+    #     print('binwell2 is',bin_well2)
 
-        wells_open = False
-        it_loop = 0
+    #     wells_open = False
+    #     it_loop = 0
 
-        while wells_open == False:
+    #     while wells_open == False:
 
-            bin_child = ''
+    #         bin_child = ''
 
-            random.seed(None)
-            selection_array = np.random.randint(0,2,64) #if 0 take from bin_well1 and if 1 take from bin_well2
-            print('random num is', selection_array)
+    #         random.seed(None)
+    #         selection_array = np.random.randint(0,2,64) #if 0 take from bin_well1 and if 1 take from bin_well2
+    #         print('random num is', selection_array)
 
-            for i in range(64):
-                if selection_array[i] == 0:
-                    bin_child = bin_child + str(list(bin_well1)[i])
-                else:
-                    bin_child = bin_child + str(list(bin_well2)[i])
+    #         for i in range(64):
+    #             if selection_array[i] == 0:
+    #                 bin_child = bin_child + str(list(bin_well1)[i])
+    #             else:
+    #                 bin_child = bin_child + str(list(bin_well2)[i])
 
-            if it_loop==10000:
-                for k in range(aquifer_layers):
-                    list(bin_child)[-1*k] = 1
+    #         if it_loop==10000:
+    #             for k in range(aquifer_layers):
+    #                 list(bin_child)[-1*k] = 1
                         
-            for j in range(aquifer_layers):
-                    it_loop +=1
+    #         for j in range(aquifer_layers):
+    #                 it_loop +=1
                     
-                    print(it_loop)
-                    if int(list(bin_child)[-1*j]) == 1:
-                        bin_child = int(bin_child,2) #conversion into int
-                        print('satisfied bin_child',bin_child)
-                        new_child.append(bin_child)
-                        wells_open = True
+    #                 print(it_loop)
+    #                 if int(list(bin_child)[-1*j]) == 1:
+    #                     bin_child = int(bin_child,2) #conversion into int
+    #                     print('satisfied bin_child',bin_child)
+    #                     new_child.append(bin_child)
+    #                     wells_open = True
                       
-    print('new child is in here is ',new_child)
+    # print('new child is in here is ',new_child)
 
     return new_child
 
@@ -546,12 +638,16 @@ def in_bounds(new_child,min_bound,max_bound):
         print('one well is', one_well)
 
         for j in range(Nvar):
-            if j<2:
-                if (min_bound<one_well[i]<max_bound):
-                    num+=1
-            else:
-                if (0<new_child[i]<18446744073709551616):
-                    num+=1
+            # if j<2:
+            print('one_well[j]', one_well[j])
+            print('min is', min_bound)
+            print('max is', max_bound)
+
+            if (min_bound<one_well[j]<max_bound):
+                num+=1
+            # else:
+            #     if (0<new_child[i]<18446744073709551616):
+            #         num+=1
 
     if num == len(new_child):
         print('bounds satisfied')
@@ -636,7 +732,7 @@ def eaAlgorithm_by_steps(pop, toolbox, CXPB, MUTPB, NGEN, halloffame):
                     if random.random() <= CXPB:
                         index = random.randint(0, 1)
                         new_child[index] += space_search_random(MIN_Halite, MAX_Halite)
-                        new_child[2] += random.randint(0, 18446744073709551615)
+                        #new_child[2] += random.randint(0, 18446744073709551615)
 
                     np_child = list(new_child)
 
@@ -644,7 +740,11 @@ def eaAlgorithm_by_steps(pop, toolbox, CXPB, MUTPB, NGEN, halloffame):
 
                     #dont need feasiblity check if sampling comes after mutation
 
-                    if (feasible(np_child)) and (new_child not in history_success_offspring) and in_bounds(new_child,MIN_Halite,MAX_Halite):
+                    print('history is',(new_child not in history_success_offspring))
+
+                    print('bounds is', in_bounds(new_child,MIN_Halite,MAX_Halite))
+
+                    if (new_child not in history_success_offspring) and in_bounds(new_child,MIN_Halite,MAX_Halite):
                         print('this feasibility should be true:', feasible(np_child))
                         feasibility_flag+=1
                         print('converted success is', convert_instance(new_child))
@@ -703,6 +803,14 @@ def eaAlgorithm_by_steps(pop, toolbox, CXPB, MUTPB, NGEN, halloffame):
         #for ind, fit in zip(invalid_ind, fitnesses):
         #    ind.fitness.values = fit
 
+        for i in pop:
+            if i not in previous_list:
+                previous_list.append(i)
+                name = get_folder_name(i)
+                key = f"{(i,name)}"
+                result = fitness(i)
+                best_can_dic[key] = result
+
         #Update hall of fame
         halloffame.update(pop)
         best_so_far = halloffame[0]
@@ -715,6 +823,18 @@ def eaAlgorithm_by_steps(pop, toolbox, CXPB, MUTPB, NGEN, halloffame):
         #Update as well best hall of fame
         create_output_file(halloffame)
         #create_best_folders(halloffame)
+
+        # for i in pop:
+        #     if i not in previous_list:
+        #         previous_list.append(i)
+        #         name = get_folder_name(i)
+        #         key = f"{(i,name)}"
+        #         #timeList, prod, inject, prod_temp, inject_temp, walltime = analyse_results(i)
+        #         result = fitness(i)
+        #         best_can_dic[key] = result
+
+        # sorted_best_can_dic = sorted(best_can_dic.items(), key=lambda x:x[1], reverse=True)
+        # print('sorted is',sorted_best_can_dic)
 
 def One_point_crossover(ind1, ind2):
     size = min(len(ind1), len(ind2))
@@ -954,93 +1074,93 @@ def linear_converter(old_var, old_min, old_max, new_min, new_max):
         val = int((float(old_var - old_min) / float(old_max - old_min) * float(new_max - new_min) + new_min))
     return val
 
-def get_converted_grid(image_fp, w_dim, h_dim, bounding_thickness):
-    image = Image.open(image_fp)
-    newsize = (520, 360)
-    image = image.resize(newsize)
-    print('size is', image.size)
-    #choose a threshold value that will split image into built up areas and non-built up areas
-    thresh = 40
-    fn = lambda x : 0 if x > thresh else 255
-    #convert image to greyscale then change it into binary image using a threshold value
-    r = image.convert('L').point(fn)
-    r = r.rotate(180).transpose(Image.FLIP_LEFT_RIGHT)
-    r = r.resize((w_dim,h_dim))
-    r_array = np.array(r)
+# def get_converted_grid(image_fp, w_dim, h_dim, bounding_thickness):
+#     image = Image.open(image_fp)
+#     newsize = (520, 360)
+#     image = image.resize(newsize)
+#     print('size is', image.size)
+#     #choose a threshold value that will split image into built up areas and non-built up areas
+#     thresh = 40
+#     fn = lambda x : 0 if x > thresh else 255
+#     #convert image to greyscale then change it into binary image using a threshold value
+#     r = image.convert('L').point(fn)
+#     r = r.rotate(180).transpose(Image.FLIP_LEFT_RIGHT)
+#     r = r.resize((w_dim,h_dim))
+#     r_array = np.array(r)
 
-    #space the will hold the converted coordinates
-    bin_grid = np.zeros((w_dim,w_dim), dtype=bool)
+#     #space the will hold the converted coordinates
+#     bin_grid = np.zeros((w_dim,w_dim), dtype=bool)
 
-    #get the spatial precision in the x-space to one in the y-space (step size)
-    first_converted = linear_converter(int(MAX_Halite/2), MIN_Halite, MAX_Halite, y_MIN_Halite, y_MAX_Halite)
-    second_converted = linear_converter(int(MAX_Halite/2)+spatial_precision, MIN_Halite, MAX_Halite, y_MIN_Halite, y_MAX_Halite)
-    step_size = second_converted - first_converted
-    print('step size is', step_size)
-    print('spatial precision:', spatial_precision)
+#     #get the spatial precision in the x-space to one in the y-space (step size)
+#     first_converted = linear_converter(int(MAX_Halite/2), MIN_Halite, MAX_Halite, y_MIN_Halite, y_MAX_Halite)
+#     second_converted = linear_converter(int(MAX_Halite/2)+spatial_precision, MIN_Halite, MAX_Halite, y_MIN_Halite, y_MAX_Halite)
+#     step_size = second_converted - first_converted
+#     print('step size is', step_size)
+#     print('spatial precision:', spatial_precision)
 
-    i = 0
-    j = 0
+#     i = 0
+#     j = 0
 
-    for y in range(0,h_dim,step_size):
-      for x in range(0,w_dim):
-        if r_array[i*step_size][j] == 0:
-          bin_grid[i*spatial_precision][j] = True
-        j+=1
-      i+=1
-      j=0
+#     for y in range(0,h_dim,step_size):
+#       for x in range(0,w_dim):
+#         if r_array[i*step_size][j] == 0:
+#           bin_grid[i*spatial_precision][j] = True
+#         j+=1
+#       i+=1
+#       j=0
     
-    #add padding to the space - NEEDS TO BE COMPATIBLE WITH THE CUBIT MODEL ie. 
-    # h_dim + 2* bounding_thickness = y (height) of model
-    bin_grid = np.pad(bin_grid, bounding_thickness, mode='constant')
+#     #add padding to the space - NEEDS TO BE COMPATIBLE WITH THE CUBIT MODEL ie. 
+#     # h_dim + 2* bounding_thickness = y (height) of model
+#     bin_grid = np.pad(bin_grid, bounding_thickness, mode='constant')
 
-    return bin_grid
+#     return bin_grid
 
-conv_grid = get_converted_grid(fp,w_dim,h_dim,bounding_thickness)
+# conv_grid = get_converted_grid(fp,w_dim,h_dim,bounding_thickness)
 
-coords = np.argwhere(conv_grid==True)
+# coords = np.argwhere(conv_grid==True)
 
-coords_copy = coords.copy()
+# coords_copy = coords.copy()
 
-# y values
-coords_copy[:,1] = coords[:,0] 
+# # y values
+# coords_copy[:,1] = coords[:,0] 
 
-# x values
-coords_copy[:,0] = coords[:,1] 
+# # x values
+# coords_copy[:,0] = coords[:,1] 
 
 import math
 from numpy.random import choice
-coords_list = list(range(0, len(coords)))
+# coords_list = list(range(0, len(coords)))
 
 #function to create child
 #probability distribution based on distance (for single parent that has one child)
-def create_child_with_probability(parent):
-  Nvar = len(Halite_options.ga_variables)
-  Nwells = Halite_options.ga_locations_to_study
+# def create_child_with_probability(parent):
+#   Nvar = len(Halite_options.ga_variables)
+#   Nwells = Halite_options.ga_locations_to_study
   
-  new_child = []
+#   new_child = []
 
-  for i in range(Nwells):
-    well = parent[i * Nvar:i * Nvar + Nvar]
+#   for i in range(Nwells):
+#     well = parent[i * Nvar:i * Nvar + Nvar]
   
-    distance_array = []
-    e_array = []
+#     distance_array = []
+#     e_array = []
   
-    for n in range(len(coords)):
-      x_dis = (well[0] - coords[n,1])**2
-      y_dis = (well[1] - coords[n,0])**2
-      distance = (x_dis+y_dis)**0.5
-      distance_array.append(distance)
-      e_array.append((10**(-distance)) * 1e250)
+#     for n in range(len(coords)):
+#       x_dis = (well[0] - coords[n,1])**2
+#       y_dis = (well[1] - coords[n,0])**2
+#       distance = (x_dis+y_dis)**0.5
+#       distance_array.append(distance)
+#       e_array.append((10**(-distance)) * 1e250)
 
-    sum_e = np.sum(e_array)
-    prob_array = np.true_divide(e_array, sum_e)
-    draw = choice(coords_list, 1, p=prob_array)
+#     sum_e = np.sum(e_array)
+#     prob_array = np.true_divide(e_array, sum_e)
+#     draw = choice(coords_list, 1, p=prob_array)
     
-    for p in range(Nvar-1,-1,-1):
-      print(coords[draw][0][p])
-      new_child.append(coords[draw][0][p]) #,1],coords[draw,0]
+#     for p in range(Nvar-1,-1,-1):
+#       print(coords[draw][0][p])
+#       new_child.append(coords[draw][0][p]) #,1],coords[draw,0]
 
-  return new_child
+#   return new_child
 
 #for depth-included wells, need to check order of coords!!!
 # def old_feasible(instance):
@@ -1065,37 +1185,37 @@ def create_child_with_probability(parent):
 #     else:
 #         return False
 
-def feasible(instance):
-    Nvar = len(Halite_options.ga_variables) #3
-    Nwells = Halite_options.ga_locations_to_study #2
-    overall_N_count = 0
-    for i in range(Nwells):
-        N_count = 0
-        well = instance[i*Nvar: i*Nvar + Nvar]
-        if well[0] in coords_copy[:,0]:
-            #print(well[0])
-            index_values = np.argwhere(coords_copy[:,0] == well[0])
-            #print(coords_copy[:,1][index_values])
-            for n in range(-spatial_precision,spatial_precision):
-              if well[1]+n in coords_copy[:,1][index_values]: ##spational precision check? (np.int(Xother[0]) / spatial_precision) * spatial_precision
-                N_count+=1
-        
-        if N_count> 0:
-          overall_N_count+=1
-            # for j in range(1,Nvar):
-            #     if well[j] in coords_copy[:,j][index_values]:
-            #         N_count+=1 
-        
-        #print(overall_N_count)
-
-    if overall_N_count == Nwells:
-        return True
-
-    else:
-        return False
-
 # def feasible(instance):
-#     return True
+#     Nvar = len(Halite_options.ga_variables) #3
+#     Nwells = Halite_options.ga_locations_to_study #2
+#     overall_N_count = 0
+#     for i in range(Nwells):
+#         N_count = 0
+#         well = instance[i*Nvar: i*Nvar + Nvar]
+#         if well[0] in coords_copy[:,0]:
+#             #print(well[0])
+#             index_values = np.argwhere(coords_copy[:,0] == well[0])
+#             #print(coords_copy[:,1][index_values])
+#             for n in range(-spatial_precision,spatial_precision):
+#               if well[1]+n in coords_copy[:,1][index_values]: ##spational precision check? (np.int(Xother[0]) / spatial_precision) * spatial_precision
+#                 N_count+=1
+        
+#         if N_count> 0:
+#           overall_N_count+=1
+#             # for j in range(1,Nvar):
+#             #     if well[j] in coords_copy[:,j][index_values]:
+#             #         N_count+=1 
+        
+#         #print(overall_N_count)
+
+#     if overall_N_count == Nwells:
+#         return True
+
+#     else:
+#         return False
+
+def feasible(instance):
+    return True
 
 # Drop the first element,
 # which will be replace by our initial guess.
@@ -1298,6 +1418,51 @@ def main():
        print('Sad')
        pass
     finally:
+
+        #manual hall of fame
+        print('manual hall of fame created')
+        sorted_best_can_dic = dict(sorted(best_can_dic.items(), key=lambda x:x[1], reverse=False))
+
+        print('sorted best can dic', sorted_best_can_dic)
+
+        import csv
+        import re
+
+        with open('manual_halloffame.csv','w', newline='') as csvfile:
+
+            fieldnames = ['Approx. Chalk Horizon Permeability (d)', 'Approx. Rest of Chalk Permeability (d)','Folder Name', 'Difference to Real Result (Pa)']
+
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            writer.writeheader()
+
+            for key, value in sorted_best_can_dic.items():
+                variables_pattern = r'\[(.*?)\]'
+                variables = re.findall(variables_pattern, key)
+                numbers = re.findall(r'\d+', variables[0])
+
+                horperm = float(numbers[0])
+                rocperm = float(numbers[1])/100
+
+                #print(numbers[0], 'x 10^(-12) m2')
+                #print(float(numbers[0]), 'd')
+                #print(float(numbers[1])/100, 'x 10^(-12) m2')
+                #print(float(numbers[1])/100, 'd')
+
+                name_pattern = r"'(.*?)'"
+                name = re.findall(name_pattern, key)
+
+      
+                writer.writerow({'Approx. Chalk Horizon Permeability (d)':horperm, 'Approx. Rest of Chalk Permeability (d)':rocperm,'Folder Name': name, 'Difference to Real Result (Pa)':value[0]})
+
+            # for key,value in sorted_best_can_dic:
+            #     variables_pattern = r'\[(.*?)\]'
+            #     variables = re.findall(variables_pattern, key)
+            #     print(variables)
+            #     name_pattern = r"'(.*?)'"
+            #     name = re.findall(name_pattern, key)
+            #     writer.writerow({'Variables':variables[0],'Folder Name': name[0], 'Result':value})
+
         #Create list with best results
         create_output_file(halloffame)
         create_best_folders(halloffame)

@@ -36,10 +36,10 @@ ga_well_location_optimisation.main()
 
 
 
-# read in the Halite options
-Halite_options = get_Halite_options()
+#read in the Halite options
+# Halite_options = get_Halite_options()
 
-call_optimisation()
+# call_optimisation()
 
 
 print("\nHalite ending \n")
